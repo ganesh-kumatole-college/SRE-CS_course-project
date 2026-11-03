@@ -1,0 +1,43 @@
+project-plan.md
+research-paper.pdf
+
+# AI Blueprint local workflow files
+.agents/
+.claude/
+blueprint/
+CLAUDE.md
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+.aws/
+**/.aws/
+
+# Local data and generated outputs
+data/raw/*
+!data/raw/.gitkeep
+data/interim/*
+!data/interim/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+neo4j_data/
+results/runs/*
+!results/runs/.gitkeep
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db

@@ -1,0 +1,28 @@
+random_seed: 42
+
+paths:
+  raw: data/raw
+  interim: data/interim
+  benchmark: data/benchmark
+  processed: data/processed
+  runs: results/runs
+
+graph:
+  backend: neo4j
+
+node2vec:
+  dimensions: 128
+  walk_length: 80
+  walks_per_node: 10
+  return_factor: 1.0
+  in_out_factor: 1.0
+  window_size: 10
+
+evaluation:
+  positive_label: misconfiguration
+  metrics:
+    - precision
+    - recall
+    - f1
+    - pr_auc
+    - roc_auc

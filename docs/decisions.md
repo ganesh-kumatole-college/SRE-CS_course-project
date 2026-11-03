@@ -42,3 +42,14 @@
 - Select the data-split protocol, prevalence variants, validation threshold
   method, and locked test-set construction.
 - Confirm the course's AI-use and source-code reuse rules with the instructor.
+
+## Data acquisition
+
+- **Policy source class:** use a public AWS-managed policy snapshot supplied as
+  a local file. Do not use AWS credentials, AWS CLI commands, or agent-driven
+  downloads.
+- **Entity scope:** the public snapshot does not contain organization entity
+  attachments. Feature 1 emits only normalized policy records; Feature 2
+  generates the synthetic entities and attachments.
+- **Exact source:** repository/URL, immutable revision, snapshot date, and
+  license remain to be selected before acquiring or validating a real snapshot.

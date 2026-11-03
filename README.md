@@ -28,3 +28,25 @@ the public paper alone.
 - `make format` - format Python files with Black.
 - `make neo4j-up` / `make neo4j-down` - start or stop local Neo4j.
 - `make smoke-gds` - run a small Node2Vec integration check against Neo4j.
+
+## Normalize a local IAM policy snapshot
+
+The normalizer accepts a local `get-account-authorization-details`-shaped JSON
+snapshot and never calls AWS or downloads data. Provide an approved snapshot's
+URL, immutable revision, date, and license as provenance. For example:
+
+```bash
+python -m misdet.collect.normalize \
+  --in data/raw/aws_managed_policies.json \
+  --out data/interim/policies.jsonl \
+  --source-url https://example.invalid/policies \
+  --revision REVISION \
+  --snapshot-date 2026-01-02 \
+  --license LICENSE
+```
+
+The command writes `policies.jsonl`, `source_manifest.json`, and
+`policy_stats.json` to the output path and its directory. The example URL and
+metadata are placeholders, not a recommended dataset. No entity records are
+produced; Feature 2 generates synthetic entities and attachments. Keep raw and
+interim data local unless the source and license have been approved.

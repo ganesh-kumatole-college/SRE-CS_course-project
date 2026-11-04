@@ -25,6 +25,11 @@
 
 - Train detectors on verified normal policies. Keep the final test split locked
   away from fitting, embedding selection, tuning, and threshold calibration.
+- Fit Node2Vec on training-normal policies and their connected graph context
+  only. Infer a held-out policy vector by averaging the learned vectors of its
+  adjacent non-policy context nodes that appeared during training; ignore
+  unknown contexts and fail explicitly if none are available. This is a
+  project-defined out-of-sample extension, not native inductive Node2Vec.
 - Derive synthetic labels from documented templates and injection operators.
 - Treat findings from synthetic organizations as a benchmark study, not as
   evidence of production AWS detection performance.

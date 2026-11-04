@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from typing import Any
 from uuid import uuid4
 
@@ -10,7 +10,12 @@ import numpy as np
 
 from misdet.graph import PolicyGraph
 
-from .py_node2vec import embed_policy_nodes, load_node2vec_config
+from .py_node2vec import (
+    _assemble_policy_vectors,
+    _prepare_training_graph,
+    embed_policy_nodes,
+    load_node2vec_config,
+)
 
 _NODE_LABEL_PREFIX = "MisdetEmbedding"
 _EDGE_TYPE = "MISDET_EMBED_EDGE"
@@ -31,6 +36,7 @@ def _gds_config(config: Mapping[str, Any]) -> dict[str, Any]:
 def embed_policy_nodes_with_gds(
     policy_graph: PolicyGraph,
     *,
+    training_policy_ids: Collection[str],
     config: Mapping[str, Any] | None = None,
     seed: int | None = None,
     uri: str | None = None,
@@ -43,7 +49,12 @@ def embed_policy_nodes_with_gds(
 
     supplied_connection = any(value is not None for value in (uri, user, password))
     if not supplied_connection:
-        return embed_policy_nodes(policy_graph, config=config, seed=seed)
+        return embed_policy_nodes(
+            policy_graph,
+            training_policy_ids=training_policy_ids,
+            config=config,
+            seed=seed,
+        )
     if not isinstance(uri, str) or not uri.strip():
         raise ValueError("uri must be supplied when requesting the GDS backend")
     if not isinstance(user, str) or not user:
@@ -61,11 +72,12 @@ def embed_policy_nodes_with_gds(
     if resolved["return_factor"] <= 0 or resolved["in_out_factor"] <= 0:
         raise ValueError("return_factor and in_out_factor must be positive")
 
-    policy_nodes = sorted(
-        node.node_id for node in policy_graph.nodes if node.kind == "Policy"
+    graph, policy_nodes, training_nodes, training_graph = _prepare_training_graph(
+        policy_graph, training_policy_ids
     )
     if not policy_nodes:
         return np.zeros((0, resolved["dimensions"]), dtype=float), []
+    fitting_node_ids = set(training_graph.nodes)
 
     try:
         from neo4j import GraphDatabase
@@ -84,10 +96,12 @@ def embed_policy_nodes_with_gds(
             nodes = [
                 {"node_id": node.node_id, "kind": node.kind}
                 for node in policy_graph.nodes
+                if node.node_id in fitting_node_ids
             ]
             edges = [
                 {"source": edge.source, "target": edge.target, "label": edge.label}
                 for edge in policy_graph.edges
+                if edge.source in fitting_node_ids and edge.target in fitting_node_ids
             ]
 
             session.run(
@@ -126,9 +140,9 @@ def embed_policy_nodes_with_gds(
             if projection is None:
                 raise RuntimeError("GDS graph projection returned no result")
             graph_projected = True
-            if projection["nodeCount"] != len(nodes) or projection[
-                "relationshipCount"
-            ] != len(edges):
+            if projection["nodeCount"] != len(nodes) or projection["relationshipCount"] != len(
+                edges
+            ):
                 raise RuntimeError(
                     "GDS graph projection count mismatch: "
                     f"expected {len(nodes)} nodes and {len(edges)} edges, "
@@ -152,14 +166,12 @@ def embed_policy_nodes_with_gds(
 
             embeddings: dict[str, np.ndarray] = {}
             for record in result:
-                if record["kind"] != "Policy":
-                    continue
                 node_id = record["node_id"]
                 vector = np.asarray(record["embedding"], dtype=float)
-                if node_id not in policy_nodes:
-                    raise RuntimeError(f"GDS returned an unknown policy node: {node_id!r}")
+                if node_id not in fitting_node_ids:
+                    raise RuntimeError(f"GDS returned an unknown graph node: {node_id!r}")
                 if node_id in embeddings:
-                    raise RuntimeError(f"GDS returned a duplicate policy node: {node_id!r}")
+                    raise RuntimeError(f"GDS returned a duplicate graph node: {node_id!r}")
                 if vector.shape != (resolved["dimensions"],):
                     raise RuntimeError(
                         f"GDS returned an invalid embedding for {node_id!r}: "
@@ -170,10 +182,16 @@ def embed_policy_nodes_with_gds(
                     raise RuntimeError(f"GDS returned a non-finite embedding for {node_id!r}")
                 embeddings[node_id] = vector
 
-            missing = sorted(set(policy_nodes) - embeddings.keys())
+            missing = sorted(fitting_node_ids - embeddings.keys())
             if missing:
-                raise RuntimeError(f"GDS returned no embeddings for policy nodes: {missing}")
-            vectors = np.vstack([embeddings[node_id] for node_id in policy_nodes])
+                raise RuntimeError(f"GDS returned no embeddings for graph nodes: {missing}")
+            vectors = _assemble_policy_vectors(
+                graph,
+                policy_nodes,
+                training_nodes,
+                embeddings,
+                dimensions=resolved["dimensions"],
+            )
             return vectors, policy_nodes
     finally:
         try:
@@ -187,8 +205,6 @@ def embed_policy_nodes_with_gds(
             try:
                 if nodes_created:
                     with driver.session() as session:
-                        session.run(
-                            f"MATCH (node:{node_label}) DETACH DELETE node"
-                        ).consume()
+                        session.run(f"MATCH (node:{node_label}) DETACH DELETE node").consume()
             finally:
                 driver.close()

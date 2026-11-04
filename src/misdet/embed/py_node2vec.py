@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from typing import Any
 
 import networkx as nx
@@ -11,6 +11,68 @@ import numpy as np
 from gensim.models import Word2Vec
 
 from misdet.graph import PolicyGraph
+
+
+def _prepare_training_graph(
+    policy_graph: PolicyGraph,
+    training_policy_ids: Collection[str],
+) -> tuple[nx.Graph, list[str], list[str], nx.Graph]:
+    graph = policy_graph.to_networkx().to_undirected()
+    policy_nodes = sorted(
+        node_id for node_id, attrs in graph.nodes(data=True) if attrs.get("kind") == "Policy"
+    )
+    if isinstance(training_policy_ids, (str, bytes)) or not isinstance(
+        training_policy_ids, Collection
+    ):
+        raise TypeError("training_policy_ids must be a collection of policy node IDs")
+    if any(not isinstance(node_id, str) for node_id in training_policy_ids):
+        raise TypeError("training_policy_ids must contain only strings")
+
+    training_nodes = set(training_policy_ids)
+    if not training_nodes and policy_nodes:
+        raise ValueError("training_policy_ids must include at least one normal policy")
+    unknown = sorted(training_nodes - set(policy_nodes))
+    if unknown:
+        raise ValueError(f"Unknown training policy node IDs: {unknown}")
+
+    context_nodes = {
+        neighbor
+        for policy_node in training_nodes
+        for neighbor in graph.neighbors(policy_node)
+        if graph.nodes[neighbor].get("kind") != "Policy"
+    }
+    training_graph = graph.subgraph(training_nodes | context_nodes).copy()
+    return graph, policy_nodes, sorted(training_nodes), training_graph
+
+
+def _assemble_policy_vectors(
+    graph: nx.Graph,
+    policy_nodes: list[str],
+    training_policy_nodes: Collection[str],
+    trained_vectors: Mapping[str, np.ndarray],
+    *,
+    dimensions: int,
+) -> np.ndarray:
+    training_set = set(training_policy_nodes)
+    vectors = np.zeros((len(policy_nodes), dimensions), dtype=float)
+    for index, policy_node in enumerate(policy_nodes):
+        if policy_node in training_set:
+            if policy_node in trained_vectors:
+                vectors[index] = trained_vectors[policy_node]
+            continue
+
+        context_nodes = sorted(
+            neighbor
+            for neighbor in graph.neighbors(policy_node)
+            if graph.nodes[neighbor].get("kind") != "Policy" and neighbor in trained_vectors
+        )
+        if not context_nodes:
+            raise ValueError(
+                f"No trained context embedding is available for inference policy "
+                f"{policy_node!r}; include a training policy with shared context"
+            )
+        vectors[index] = np.mean([trained_vectors[node_id] for node_id in context_nodes], axis=0)
+    return np.nan_to_num(vectors, nan=0.0, posinf=0.0, neginf=0.0)
 
 
 def load_node2vec_config(
@@ -145,20 +207,21 @@ def _policy_signature(
 def embed_policy_nodes(
     policy_graph: PolicyGraph,
     *,
+    training_policy_ids: Collection[str],
     config: Mapping[str, Any] | None = None,
     seed: int | None = None,
 ) -> tuple[np.ndarray, list[str]]:
-    """Embed policy nodes as a deterministic 128-D vector matrix."""
+    """Fit on training policies and infer other policy vectors from shared context.
+
+    ``training_policy_ids`` contains canonical policy node IDs, such as
+    ``Policy:example``. The returned matrix remains ordered by all policy node IDs.
+    """
     if not isinstance(policy_graph, PolicyGraph):
         raise TypeError("policy_graph must be a PolicyGraph instance")
 
     resolved = load_node2vec_config(config, seed=seed)
-    graph = policy_graph.to_networkx().to_undirected()
-
-    policy_nodes = sorted(
-        node_id
-        for node_id, attrs in graph.nodes(data=True)
-        if attrs.get("kind") == "Policy"
+    graph, policy_nodes, training_nodes, training_graph = _prepare_training_graph(
+        policy_graph, training_policy_ids
     )
 
     if not policy_nodes:
@@ -166,8 +229,8 @@ def embed_policy_nodes(
         return empty, []
 
     walks = _build_walks(
-        graph,
-        policy_nodes,
+        training_graph,
+        training_nodes,
         walk_length=resolved["walk_length"],
         walks_per_node=resolved["walks_per_node"],
         return_factor=resolved["return_factor"],
@@ -185,16 +248,24 @@ def embed_policy_nodes(
         seed=resolved["seed"],
     )
 
-    vectors = np.zeros((len(policy_nodes), resolved["dimensions"]), dtype=float)
-    for index, node_id in enumerate(policy_nodes):
+    trained_vectors: dict[str, np.ndarray] = {}
+    for node_id in training_graph.nodes:
         if node_id in model.wv:
-            vectors[index] = model.wv[node_id]
-        vectors[index] += 0.5 * _policy_signature(
-            graph,
-            node_id,
-            dimensions=resolved["dimensions"],
-            seed=resolved["seed"],
-        )
+            trained_vectors[node_id] = np.asarray(model.wv[node_id], dtype=float)
+    for node_id in training_nodes:
+        if node_id in trained_vectors:
+            trained_vectors[node_id] = trained_vectors[node_id] + 0.5 * _policy_signature(
+                training_graph,
+                node_id,
+                dimensions=resolved["dimensions"],
+                seed=resolved["seed"],
+            )
 
-    vectors = np.nan_to_num(vectors, nan=0.0, posinf=0.0, neginf=0.0)
+    vectors = _assemble_policy_vectors(
+        graph,
+        policy_nodes,
+        training_nodes,
+        trained_vectors,
+        dimensions=resolved["dimensions"],
+    )
     return vectors, policy_nodes

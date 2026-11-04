@@ -29,10 +29,9 @@ def main() -> None:
                     CREATE (node:{label} {{id: id}})
                     WITH collect(node) AS nodes
                     UNWIND range(0, 4) AS index
-                    WITH nodes, index
-                    CREATE (nodes[index])-[:SMOKE_LINK]->(
-                      nodes[(index + 1) % size(nodes)]
-                    )
+                    WITH nodes[index] AS source,
+                         nodes[(index + 1) % size(nodes)] AS target
+                    CREATE (source)-[:SMOKE_LINK]->(target)
                     """
                 ).consume()
                 nodes_created = True

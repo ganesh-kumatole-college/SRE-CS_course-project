@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 
@@ -23,8 +24,8 @@ def apply_injection_operator(policy: dict[str, Any], operator_id: str, org: str)
         statement["Resource"] = [f"arn:aws:s3:::{org}-prod/*", "arn:aws:s3:::*"]
         statement["Effect"] = "Allow"
     elif operator_id == "P2":
-        statement["Action"] = ["iam:*", "ec2:runinstances"]
-        statement["Resource"] = [f"arn:aws:iam::*:role/{org}-*", "arn:aws:ec2:*:*:instance/*"]
+        statement["Action"] = ["iam:*"]
+        statement["Resource"] = ["*"]
         statement["Effect"] = "Allow"
     elif operator_id == "A3":
         statement["Action"] = ["s3:putobject", "iam:createuser"]
@@ -46,12 +47,19 @@ def inject_misconfigurations(
     policies: list[dict[str, Any]],
     org_profiles: dict[str, dict[str, Any]] | None = None,
     seed: int = 7,
+    operator_by_policy_id: Mapping[str, str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Return the policy list with selective injection operators applied."""
+    """Apply configured operators, leaving unselected policies unchanged."""
     if not isinstance(policies, list):
         raise ValueError("policies must be a list")
     if not policies:
         return []
+
+    policy_ids = {policy.get("policy_id") for policy in policies}
+    if operator_by_policy_id is not None:
+        unknown_ids = set(operator_by_policy_id) - policy_ids
+        if unknown_ids:
+            raise ValueError(f"operator mapping contains unknown policy IDs: {sorted(unknown_ids)}")
 
     result: list[dict[str, Any]] = []
     for index, policy in enumerate(policies):
@@ -59,16 +67,23 @@ def inject_misconfigurations(
         if org is None:
             raise ValueError(f"policy at index {index} is missing an org")
 
-        operator_id = "P1"
-        if index % 3 == 1:
-            operator_id = "P2"
-        elif index % 3 == 2:
-            operator_id = "A3"
+        if operator_by_policy_id is not None:
+            operator_id = operator_by_policy_id.get(str(policy.get("policy_id")))
+            result.append(
+                apply_injection_operator(policy, operator_id, org)
+                if operator_id is not None
+                else policy
+            )
+        else:
+            operator_id = "P1"
+            if index % 3 == 1:
+                operator_id = "P2"
+            elif index % 3 == 2:
+                operator_id = "A3"
 
-        if org_profiles and org in org_profiles:
-            if index % 2:
+            if org_profiles and org in org_profiles and index % 2:
                 operator_id = next(iter(org_profiles[org]["positive_operators"]))
-        result.append(apply_injection_operator(policy, operator_id, org))
+            result.append(apply_injection_operator(policy, operator_id, org))
     return result
 
 
@@ -76,6 +91,12 @@ def generate_injections(
     policies: list[dict[str, Any]],
     org_profiles: dict[str, dict[str, Any]] | None = None,
     seed: int = 7,
+    operator_by_policy_id: Mapping[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Backward-compatible alias for the injection helper."""
-    return inject_misconfigurations(policies, org_profiles=org_profiles, seed=seed)
+    return inject_misconfigurations(
+        policies,
+        org_profiles=org_profiles,
+        seed=seed,
+        operator_by_policy_id=operator_by_policy_id,
+    )

@@ -12,18 +12,26 @@ from typing import Any
 from .injector import inject_misconfigurations
 from .labels import LABEL_COLUMNS, build_label_rows
 from .org_profiles import build_org_profiles
+from .templates import ORG_POLICY_TEMPLATES, POLICY_TEMPLATES
+
+NORMAL_POLICIES_PER_ORG = 350
+MISCONFIGURATIONS_PER_ORG = 30
 
 
-def _canonical_policy(org: str, index: int, template_name: str, action_seed: int) -> dict[str, Any]:
-    action_values = ["s3:getobject", "ec2:describeinstances", "iam:listroles", "logs:getlogevents"]
-    resource_values = [
-        f"arn:aws:s3:::${org}-data/*",
-        "arn:aws:ec2:*:*:instance/*",
-        f"arn:aws:iam::*:role/{org}-*",
-        f"arn:aws:logs:*:*:log-group:{org}/*",
-    ]
-    action = action_values[(index + action_seed) % len(action_values)]
-    resource = resource_values[(index + action_seed + 1) % len(resource_values)]
+def _canonical_policy(
+    org: str,
+    index: int,
+    template_name: str,
+    action_seed: int,
+) -> dict[str, Any]:
+    template = POLICY_TEMPLATES[template_name]
+    actions = list(template["Action"])
+    resources = list(template["Resource"])
+    if action_seed % 2:
+        actions.reverse()
+    if action_seed % 3 == 0:
+        resources.reverse()
+
     return {
         "policy_id": f"{org}-policy-{index:02d}",
         "org": org,
@@ -34,8 +42,8 @@ def _canonical_policy(org: str, index: int, template_name: str, action_seed: int
                 {
                     "Sid": f"{org}-{template_name}-{index:02d}",
                     "Effect": "Allow",
-                    "Action": [action],
-                    "Resource": [resource],
+                    "Action": actions,
+                    "Resource": resources,
                 }
             ],
         },
@@ -67,6 +75,7 @@ def generate_attachments(
     policies: list[dict[str, Any]],
     entities: list[dict[str, Any]],
     seed: int = 7,
+    operator_by_policy_id: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Attach policies to entities in a deterministic round-robin sequence."""
     if not policies:
@@ -81,7 +90,14 @@ def generate_attachments(
         candidates = entity_rows_by_org.get(org, [])
         if not candidates:
             continue
-        entity = candidates[(index + seed) % len(candidates)]
+        candidate_index = (index + seed) % len(candidates)
+        if operator_by_policy_id and operator_by_policy_id.get(policy["policy_id"]) == "A3":
+            if len(candidates) < 2:
+                raise ValueError(
+                    f"cannot misattach policy {policy['policy_id']!r}: org has one entity"
+                )
+            candidate_index = (candidate_index + 1) % len(candidates)
+        entity = candidates[candidate_index]
         attachments.append(
             {
                 "policy_id": policy["policy_id"],
@@ -104,20 +120,43 @@ def generate_benchmark(
         org_profiles = {name: org_profiles[name] for name in org_names if name in org_profiles}
 
     policies: list[dict[str, Any]] = []
+    operator_by_policy_id: dict[str, str] = {}
     for org_name in sorted(org_profiles):
-        for index in range(6):
-            if org_name == "alpha":
-                template_name = "prod_read"
-            elif org_name == "beta":
-                template_name = "ops_read"
-            else:
-                template_name = "data_read"
-            policies.append(_canonical_policy(org_name, index, template_name, seed + index))
+        operator_ids = list(org_profiles[org_name]["positive_operators"])
+        for index in range(NORMAL_POLICIES_PER_ORG + MISCONFIGURATIONS_PER_ORG):
+            template_names = ORG_POLICY_TEMPLATES[org_name]
+            template_name = template_names[index % len(template_names)]
+            policy = _canonical_policy(
+                org_name,
+                index,
+                template_name,
+                seed + index,
+            )
+            if index >= NORMAL_POLICIES_PER_ORG:
+                operator_by_policy_id[policy["policy_id"]] = operator_ids[
+                    (index - NORMAL_POLICIES_PER_ORG) % len(operator_ids)
+                ]
+            policies.append(policy)
 
-    policies = inject_misconfigurations(policies, org_profiles=org_profiles, seed=seed)
+    policies = inject_misconfigurations(
+        policies,
+        org_profiles=org_profiles,
+        seed=seed,
+        operator_by_policy_id=operator_by_policy_id,
+    )
     entities = generate_entities(org_profiles, seed=seed)
-    attachments = generate_attachments(policies, entities, seed=seed)
-    labels = build_label_rows(policies, entities=entities, attachments=attachments)
+    attachments = generate_attachments(
+        policies,
+        entities,
+        seed=seed,
+        operator_by_policy_id=operator_by_policy_id,
+    )
+    labels = build_label_rows(
+        policies,
+        entities=entities,
+        attachments=attachments,
+        operator_by_policy_id=operator_by_policy_id,
+    )
 
     benchmark = {
         "seed": seed,

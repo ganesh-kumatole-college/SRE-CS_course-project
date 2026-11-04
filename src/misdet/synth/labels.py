@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,7 @@ def build_label_rows(
     policies: list[dict[str, Any]],
     entities: list[dict[str, Any]] | None = None,
     attachments: list[dict[str, Any]] | None = None,
+    operator_by_policy_id: Mapping[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Create label rows for each synthetic policy, including both positives and negatives."""
     if not isinstance(policies, list):
@@ -37,36 +39,36 @@ def build_label_rows(
             if policy_id and entity_id:
                 attachment_map[policy_id] = entity_id
 
+    legacy_operator_ids = {0: "P1", 1: "P2", 2: "A3"}
     label_rows: list[dict[str, Any]] = []
     for index, policy in enumerate(policies):
         policy_id = str(policy.get("policy_id", f"policy-{index:02d}"))
         org = str(policy.get("org", "unknown"))
         entity_id = attachment_map.get(policy_id, "")
+        operator_id = (
+            operator_by_policy_id.get(policy_id)
+            if operator_by_policy_id is not None
+            else legacy_operator_ids.get(index % 4)
+        )
 
-        if index % 4 == 0:
+        if operator_id == "P1":
             label = 1
             misconfig_type = "permissive"
-            operator_id = "P1"
             difficulty = "easy" if index % 8 == 0 else "medium"
             hard_negative = 0
             rationale = (
                 f"Synthetic {org} policy over-grants {policy_id} in a permissive "
                 "operating pattern."
             )
-        elif index % 4 == 1:
+        elif operator_id == "P2":
             label = 1
-            misconfig_type = "restrictive"
-            operator_id = "P2"
-            difficulty = "medium"
-            hard_negative = 1
-            rationale = (
-                f"Synthetic {org} policy is intentionally difficult to distinguish "
-                "from a normal restrictive policy."
-            )
-        elif index % 4 == 2:
+            misconfig_type = "permissive"
+            difficulty = "easy"
+            hard_negative = 0
+            rationale = f"Synthetic {org} policy grants a wildcard service on all resources."
+        elif operator_id == "A3":
             label = 1
             misconfig_type = "misattached"
-            operator_id = "A3"
             difficulty = "medium"
             hard_negative = 0
             rationale = (
@@ -74,6 +76,8 @@ def build_label_rows(
                 "a misattached administrator role."
             )
         else:
+            if operator_id is not None:
+                raise ValueError(f"unsupported operator {operator_id!r} for policy {policy_id!r}")
             label = 0
             misconfig_type = "none"
             operator_id = "none"

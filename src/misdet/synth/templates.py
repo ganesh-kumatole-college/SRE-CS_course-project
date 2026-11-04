@@ -55,3 +55,9 @@ POLICY_TEMPLATES: dict[str, dict[str, list[str]]] = {
         "Resource": ["arn:aws:ec2:*:*:instance/*", "arn:aws:logs:*:*:log-group:*"],
     },
 }
+
+ORG_POLICY_TEMPLATES: dict[str, list[str]] = {
+    "alpha": ["prod_read", "prod_write", "hard_negative"],
+    "beta": ["ops_read", "ops_write", "hard_negative"],
+    "gamma": ["data_read", "research_admin", "hard_negative"],
+}

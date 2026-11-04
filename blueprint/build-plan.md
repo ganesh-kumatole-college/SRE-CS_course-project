@@ -1,19 +1,21 @@
 # Build Plan
 
-Proposed feature order adapted from Phases 3-12 in the supplied root
-`project-plan.md`. The detailed source plan ends during Phase 4, so later
-features are provisional high-level milestones, not complete specifications.
-Review the scope and order before using `/feature`.
+Detailed phase tasks, experiment definitions, risks, and paper guidance are in
+the local [`detailed-plan.md`](../detailed-plan.md). Feature IDs and order below
+remain stable; Feature 1 maps to completed Phase 3 and Features 2–10 map to
+Phases 4–12. Each `/feature` spec selects the bounded scope for its next item.
+MUST scope is expected; SHOULD/COULD work is optional and requires explicit
+inclusion in the relevant feature spec.
 
 ## Your features
 
-- [x] 1. **Acquire and normalize IAM policy data** - define canonical policy and entity inputs, normalize approved AWS-managed policy snapshots, and document their provenance.
-- [ ] 2. **Generate the labelled synthetic benchmark** - create three organization profiles, policy templates, misconfiguration injections, and deterministic ground-truth labels.
-- [ ] 3. **Build the IAM policy graph** - implement the paper's entity, policy, action, and resource relationships, with a NetworkX fallback; detailed design is **TODO**.
-- [ ] 4. **Embed policy nodes with Node2Vec** - produce 128-dimensional policy representations and record chosen graph and walk settings; the implementation protocol is **TODO**.
-- [ ] 5. **Implement anomaly detectors and evaluation** - train on normal policies and evaluate held-out cases with leakage-safe splits and documented metrics; exact protocol is **TODO**.
-- [ ] 6. **Compare rule-based and feature-based baselines** - evaluate Cloud Custodian or an equivalent rule baseline alongside heuristic and hand-crafted-feature baselines; scope and tooling are **TODO**.
-- [ ] 7. **Run the reproduction and robustness experiments** - implement selected paper analogues, ablations, and robustness studies with a locked test set; experiment specifications are **TODO**.
-- [ ] 8. **Analyze results and failure cases** - generate result tables and figures, inspect errors by misconfiguration type, and document limitations; analysis requirements are **TODO**.
-- [ ] 9. **Write the research paper** - present the reimplementation, benchmark contribution, evaluation, and limitations; course format and acceptance criteria are **TODO**.
-- [ ] 10. **Package the reproducible deliverables** - document setup and reproduction, finalize source and data licensing, and prepare any required demo or viva material; submission requirements are **TODO**.
+- [x] 1. **Acquire and normalize IAM policy data** - Phase 3: define the canonical policy contract, normalize a locally supplied approved AWS-managed snapshot, preserve provenance, and report deterministic statistics. No AWS CLI or agent-driven downloads.
+- [x] 2. **Generate the labelled synthetic benchmark** - Phase 4: freeze a labeling rubric; generate three distinct organization profiles, custom policy templates, entities/attachments, hard negatives, and traceable P1–A3 injection labels deterministically. MUST.
+- [ ] 3. **Build the IAM policy graph** - Phase 5: implement the faithful Entity–Policy–Action–Resource graph, idempotent Neo4j loading and NetworkX fallback, incremental updates, validation/export, and example graph. Statement-scoped graph is SHOULD.
+- [ ] 4. **Embed policy nodes with Node2Vec** - Phase 6: produce configured 128-dimensional policy embeddings through GDS or the Python fallback, with seeded sanity, stability, timing, and visualization checks. Parameter sensitivity is SHOULD.
+- [ ] 5. **Implement anomaly detectors and evaluation** - Phase 7: implement LOF, One-Class SVM, Isolation Forest, and Robust Covariance; leakage-safe splits, train-only fitting/tuning/calibration, metrics, bootstrap intervals, and run records. MUST.
+- [ ] 6. **Compare rule-based and feature-based baselines** - Phase 8: evaluate random/prevalence, wildcard, permissiveness, hand-crafted-feature, and offline Cloud Custodian or clearly labelled equivalent baselines on matching splits. Bag-of-actions is SHOULD; extra tools/embeddings are COULD.
+- [ ] 7. **Run the reproduction and robustness experiments** - Phase 9: script the paper analogues, Node2Vec ablation, and per-type/difficulty analyses with locked tests, 30 seeded repetitions, raw counts, intervals, and reproducible run artifacts. EXP-01–04, 07, and 13 are MUST; remaining experiments follow the detailed plan's SHOULD/COULD priorities.
+- [ ] 8. **Analyze results and failure cases** - Phase 10: create claims-to-evidence records, per-organization false-positive/negative analysis, workload views, paper-comparison verdicts, and reproducible figures/tables.
+- [ ] 9. **Write the research paper** - Phase 11 (parallel where evidence permits): document method, benchmark, evaluation, results, threats to validity, limitations, and verified references; use generated results only and follow confirmed course requirements.
+- [ ] 10. **Package the reproducible deliverables** - Phase 12: verify clean-environment reproduction, document data/licensing and AI use, remove sensitive material, and prepare required release, paper, slides, demo, or viva artifacts.

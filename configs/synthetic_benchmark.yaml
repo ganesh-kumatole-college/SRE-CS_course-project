@@ -1,0 +1,19 @@
+seed: 7
+org_names:
+  - alpha
+  - beta
+  - gamma
+output_dir: data/benchmark
+
+labels:
+  columns:
+    - policy_id
+    - org
+    - label
+    - misconfig_type
+    - operator_id
+    - difficulty
+    - hard_negative
+    - attached_entity_id
+    - source
+    - rationale

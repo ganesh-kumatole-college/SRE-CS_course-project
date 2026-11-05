@@ -20,6 +20,22 @@ node2vec:
 
 evaluation:
   positive_label: misconfiguration
+  split:
+    protocol: paper_90_10
+    test_fraction: 0.1
+    validation_folds: 5
+  detector:
+    name: lof
+    scale: true
+    params:
+      n_neighbors: 5
+      novelty: true
+  threshold:
+    mode: calibrated
+    percentile: 95
+  bootstrap:
+    replicates: 2000
+    alpha: 0.05
   metrics:
     - precision
     - recall

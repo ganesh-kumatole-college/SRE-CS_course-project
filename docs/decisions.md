@@ -36,6 +36,24 @@
 - The paper's parameters and results must be separated from project choices and
   inferred settings.
 
+## Feature 5 evaluation protocol
+
+- The main split is the paper-style 90/10 normal split: 90 percent of normal
+  policies form the training pool, 10 percent of normals are locked in the test
+  set, and all labelled misconfigurations are in the test set.
+- Validation folds partition the training-normal pool. Each validation fold is
+  scored by a detector fitted on the other training normals, so calibration
+  does not score rows with the model that fitted them.
+- The default threshold mode is calibrated at the 95th percentile of those
+  held-out normal validation scores. The model's native prediction is retained
+  as the paper-style alternative.
+- Anomaly scores are normalized so larger values mean more anomalous for all
+  four detectors: LOF, One-Class SVM, Isolation Forest, and Elliptic Envelope.
+- Reported headline metrics treat `misconfiguration` as the positive class and
+  include minority-class precision, recall, F1, PR-AUC, and ROC-AUC. Bootstrap
+  intervals use a seeded 2,000-resample percentile procedure and skip invalid
+  one-class resamples.
+
 ## To resolve before experiments
 
 - Choose the public AWS-managed policy snapshot and record its source, date,

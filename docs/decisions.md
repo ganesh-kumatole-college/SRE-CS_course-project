@@ -66,6 +66,38 @@
   method, and locked test-set construction.
 - Confirm the course's AI-use and source-code reuse rules with the instructor.
 
+## Feature 6 baseline protocol
+
+- Baselines use the Feature 5 `paper_90_10` split. All labelled
+  misconfigurations and the selected normal test rows are scored only after the
+  split is frozen; no test labels or scores are used to fit, scale, calibrate,
+  tune, or select a baseline.
+- The random baseline assigns seeded uniform scores to the locked test rows and
+  predicts the top rows needed to match the positive prevalence observed in the
+  training labels. Because the current training pool contains verified normal
+  policies only, that prediction count is zero. The prevalence baseline emits
+  the training prevalence as a constant score and the corresponding binary
+  reference prediction.
+- The wildcard baseline counts wildcard patterns in Allow statements across
+  both action and resource selectors, including `NotAction` and `NotResource`.
+  The permissiveness baseline counts Allow action and resource patterns and
+  adds two points per wildcard action plus one point per wildcard resource.
+  Deny statements do not increase either anomaly score.
+- `offline_custodian_equivalent` is a project-defined offline rule bundle, not
+  Cloud Custodian output. It flags an Allow statement when an action selector is
+  `*` or ends in `:*`, or when a resource selector is exactly `*`. It exists to
+  provide a clearly labelled broad-grant rule comparison without installing or
+  invoking external tooling.
+- The hand-crafted feature baseline uses a fixed document-only vector: total,
+  Allow, and Deny statement counts; action and resource selector counts;
+  wildcard action and resource counts; `NotAction` and `NotResource` statement
+  counts; and Condition and Principal statement counts. It fits the existing
+  detector and train-only threshold calibration protocol.
+- Baseline metrics and predictions are generated into separate run directories
+  with the baseline name, resolved split, seed, environment, and Git revision.
+  The offline rule bundle is not evidence of Cloud Custodian equivalence beyond
+  this intentionally narrow broad-grant comparison.
+
 ## Data acquisition
 
 - **Policy source class:** use a public AWS-managed policy snapshot supplied as

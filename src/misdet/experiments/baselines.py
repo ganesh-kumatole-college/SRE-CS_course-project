@@ -23,10 +23,12 @@ from sklearn.metrics import (
 
 from misdet.baselines import (
     BASELINE_NAMES,
+    fit_bag_of_actions,
     handcrafted_features,
     prevalence_output,
     random_scores,
     rule_output,
+    transform_bag_of_actions,
     validate_policies,
 )
 from misdet.detect.models import fit_detector
@@ -221,6 +223,11 @@ def run_baseline_comparison(
     policy_by_id = {policy["policy_id"]: policy for policy in records}
     test_policies = [policy_by_id[policy_id] for policy_id in split.test_ids]
     all_features = handcrafted_features(records) if "handcrafted_feature" in names else None
+    bag_features = None
+    if "bag_of_actions" in names:
+        training_policies = [records[index] for index in train_indices]
+        bag_encoder = fit_bag_of_actions(training_policies)
+        bag_features = transform_bag_of_actions(records, bag_encoder)
     output_root = Path(output_dir)
     output_root.mkdir(parents=True, exist_ok=True)
     outputs: dict[str, Path] = {}
@@ -228,9 +235,10 @@ def run_baseline_comparison(
         output = output_root / name
         if output.exists():
             raise FileExistsError(f"refusing to overwrite existing run directory: {output}")
-        if name == "handcrafted_feature":
-            assert all_features is not None
-            train_features = all_features[train_indices]
+        if name in {"handcrafted_feature", "bag_of_actions"}:
+            features = all_features if name == "handcrafted_feature" else bag_features
+            assert features is not None
+            train_features = features[train_indices]
             model = fit_detector(
                 detector_name,
                 train_features,
@@ -248,7 +256,7 @@ def run_baseline_comparison(
                 seed=seed,
             )
             threshold = calibrate_threshold(validation_scores, percentile=threshold_percentile)
-            scores = model.score(all_features[test_indices])
+            scores = model.score(features[test_indices])
             predictions = predict_with_threshold(scores, threshold)
         else:
             scores, predictions = _rule_or_random_output(

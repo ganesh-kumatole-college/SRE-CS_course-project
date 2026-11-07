@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 BASELINE_NAMES = (
     "random",
@@ -15,6 +16,7 @@ BASELINE_NAMES = (
     "permissiveness",
     "offline_custodian_equivalent",
     "handcrafted_feature",
+    "bag_of_actions",
 )
 
 HANDCRAFTED_FEATURE_NAMES = (
@@ -147,6 +149,47 @@ def handcrafted_features(policies: Sequence[Mapping[str, Any]]) -> np.ndarray:
     if values.shape != (len(records), len(HANDCRAFTED_FEATURE_NAMES)):
         raise ValueError("hand-crafted feature matrix has an unexpected shape")
     return values
+
+
+def _action_documents(policies: Sequence[Mapping[str, Any]]) -> list[str]:
+    records = _validate_policy_records(policies)
+    documents: list[str] = []
+    for policy in records:
+        tokens: list[str] = []
+        for statement in _statements(policy):
+            field = "notaction" if "NotAction" in statement else "action"
+            source_field = "NotAction" if field == "notaction" else "Action"
+            tokens.extend(f"{field}:{value}" for value in statement[source_field])
+        documents.append(" ".join(tokens))
+    return documents
+
+
+def fit_bag_of_actions(policies: Sequence[Mapping[str, Any]]) -> TfidfVectorizer:
+    """Fit a label-independent TF-IDF encoder on the supplied policies."""
+    vectorizer = TfidfVectorizer(
+        lowercase=False,
+        token_pattern=r"(?u)\S+",
+        norm="l2",
+        dtype=np.float64,
+    )
+    vectorizer.fit(_action_documents(policies))
+    return vectorizer
+
+
+def transform_bag_of_actions(
+    policies: Sequence[Mapping[str, Any]], vectorizer: TfidfVectorizer
+) -> np.ndarray:
+    """Transform policy action documents using an encoder fit on training data."""
+    _validate_policy_records(policies)
+    values = vectorizer.transform(_action_documents(policies)).toarray()
+    if values.ndim != 2:
+        raise ValueError("bag-of-actions features must be a two-dimensional array")
+    return values
+
+
+def bag_of_actions_features(policies: Sequence[Mapping[str, Any]]) -> np.ndarray:
+    """Return deterministic TF-IDF action features for one policy collection."""
+    return transform_bag_of_actions(policies, fit_bag_of_actions(policies))
 
 
 def _rule_score(policy: Mapping[str, Any], name: str) -> float:

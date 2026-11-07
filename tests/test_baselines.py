@@ -3,10 +3,13 @@ import pytest
 
 from misdet.baselines.core import (
     HANDCRAFTED_FEATURE_NAMES,
+    bag_of_actions_features,
+    fit_bag_of_actions,
     handcrafted_features,
     prevalence_output,
     random_scores,
     rule_output,
+    transform_bag_of_actions,
 )
 from misdet.experiments import run_baseline_comparison
 
@@ -69,6 +72,49 @@ def test_handcrafted_features_have_stable_columns_and_finite_values():
     assert HANDCRAFTED_FEATURE_NAMES[0] == "statement_count"
     assert values[0, 1] == 1
     assert values[1, 2] == 1
+
+
+def test_bag_of_actions_is_deterministic_and_can_transform_held_out_policies():
+    policies = [
+        _policy(policy_id="policy-1", action=["s3:GetObject", "s3:ListBucket"]),
+        _policy(policy_id="policy-2", action=["iam:PassRole"]),
+    ]
+    first = bag_of_actions_features(policies)
+    second = bag_of_actions_features(policies)
+    np.testing.assert_array_equal(first, second)
+
+    encoder = fit_bag_of_actions([policies[0]])
+    held_out = transform_bag_of_actions([policies[1]], encoder)
+    assert held_out.shape == (1, len(encoder.vocabulary_))
+    assert np.isfinite(held_out).all()
+
+
+def test_bag_of_actions_baseline_uses_the_shared_split(tmp_path):
+    policies = [
+        _policy(policy_id=f"policy-{index:02d}", action=["s3:GetObject"])
+        for index in range(20)
+    ]
+    labels = [
+        {"policy_id": policy["policy_id"], "label": int(index >= 16)}
+        for index, policy in enumerate(policies)
+    ]
+    outputs = run_baseline_comparison(
+        policies,
+        labels,
+        tmp_path / "runs",
+        baseline_names=("handcrafted_feature", "bag_of_actions"),
+        detector_name="one_class_svm",
+        detector_params={"nu": 0.2},
+        validation_folds=4,
+        bootstrap_replicates=10,
+        seed=3,
+    )
+    assert set(outputs) == {"handcrafted_feature", "bag_of_actions"}
+    handcrafted_ids = (outputs["handcrafted_feature"] / "preds.csv").read_text().splitlines()[1:]
+    bag_ids = (outputs["bag_of_actions"] / "preds.csv").read_text().splitlines()[1:]
+    assert [row.split(",", 1)[0] for row in handcrafted_ids] == [
+        row.split(",", 1)[0] for row in bag_ids
+    ]
 
 
 def test_random_and_prevalence_baselines_are_deterministic():

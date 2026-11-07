@@ -1,0 +1,16 @@
+exp_id: exp01
+orgs: [alpha]
+seeds: "0..29"
+paths: {input_root: data/benchmark, output_root: results/runs}
+split: {protocol: paper_90_10, test_fraction: 0.1, validation_folds: 5, misconfigs_in_test: all}
+methods: [node2vec]
+detector: lof
+detector_params: {n_neighbors: 5, novelty: true}
+detector_grid:
+  lof: [{n_neighbors: 5, novelty: true}, {n_neighbors: 10, novelty: true}]
+  one_class_svm: [{nu: 0.1, gamma: scale}, {nu: 0.5, gamma: scale}]
+  isolation_forest: [{n_estimators: 30}, {n_estimators: 100}]
+  robust_covariance: [{contamination: 0.1}, {contamination: 0.2}]
+threshold: {mode: calibrated, percentile: 95, validation: kfold_normals}
+metrics: [precision, recall, f1, pr_auc, roc_auc]
+bootstrap_replicates: 2000

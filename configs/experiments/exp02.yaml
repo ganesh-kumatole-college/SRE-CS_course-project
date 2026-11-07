@@ -1,0 +1,11 @@
+exp_id: exp02
+orgs: [alpha, beta, gamma]
+seeds: "0..29"
+paths: {input_root: data/benchmark, output_root: results/runs}
+split: {protocol: paper_90_10, test_fraction: 0.1, validation_folds: 5, misconfigs_in_test: all}
+methods: [node2vec, random, prevalence, wildcard, permissiveness, handcrafted_feature, bag_of_actions, offline_custodian_equivalent]
+detector: lof
+detector_params: {n_neighbors: 5, novelty: true}
+threshold: {mode: calibrated, percentile: 95, validation: kfold_normals}
+metrics: [precision, recall, f1, pr_auc, roc_auc]
+bootstrap_replicates: 2000

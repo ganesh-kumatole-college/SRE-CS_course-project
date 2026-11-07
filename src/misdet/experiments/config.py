@@ -50,6 +50,7 @@ class ExperimentConfig:
     threshold: dict[str, Any]
     metrics: tuple[str, ...]
     bootstrap_replicates: int
+    contamination_levels: tuple[int | str, ...]
 
 
 def _require_mapping(value: Any, *, name: str) -> dict[str, Any]:
@@ -155,6 +156,16 @@ def resolve_config(raw: dict[str, Any], *, base_dir: str | Path = ".") -> Experi
         raise ValueError("bootstrap_replicates must be an integer")
     if bootstrap_replicates <= 0:
         raise ValueError("bootstrap_replicates must be positive")
+    levels_raw = raw.get("contamination_levels", [0, 1, 5, 10, "percent"])
+    if not isinstance(levels_raw, list) or not levels_raw:
+        raise ValueError("contamination_levels must be a non-empty list")
+    levels: list[int | str] = []
+    for level in levels_raw:
+        valid_count = isinstance(level, int) and not isinstance(level, bool) and level >= 0
+        if level == "percent" or valid_count:
+            levels.append(level)
+        else:
+            raise ValueError("contamination_levels must contain counts or 'percent'")
     root = Path(base_dir)
     return ExperimentConfig(
         exp_id=exp_id,
@@ -172,6 +183,7 @@ def resolve_config(raw: dict[str, Any], *, base_dir: str | Path = ".") -> Experi
         threshold=dict(threshold),
         metrics=metrics,
         bootstrap_replicates=bootstrap_replicates,
+        contamination_levels=tuple(levels),
     )
 
 

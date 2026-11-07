@@ -15,6 +15,7 @@ from misdet.embed import embed_policy_nodes
 from misdet.eval.splits import make_evaluation_split
 from misdet.graph import build_policy_graph
 
+from .aggregate import aggregate_seed_metrics, grouped_recall
 from .artifacts import write_run_artifacts
 from .config import ExperimentConfig
 from .protocols import (
@@ -175,6 +176,15 @@ def run_configured_experiment(config: ExperimentConfig) -> list[Path]:
                 )
             elif config.exp_id == "exp02":
                 outputs.extend(
+                    run_detector_comparison(
+                        policy_ids, embeddings, labels, output_root / "node2vec",
+                        detectors=(config.detector,),
+                        detector_params={config.detector: config.detector_params},
+                        validation_folds=config.split.validation_folds, seed=seed,
+                        label_rows=benchmark.label_rows,
+                    ).values()
+                )
+                outputs.extend(
                     run_baselines_for_org(config, benchmark, output_root, seed=seed).values()
                 )
             elif config.exp_id == "exp04":
@@ -208,8 +218,7 @@ def run_configured_experiment(config: ExperimentConfig) -> list[Path]:
                     ).values()
                 )
             elif config.exp_id == "exp13":
-                outputs.extend(
-                    run_detector_comparison(
+                detector_outputs = run_detector_comparison(
                         policy_ids,
                         embeddings,
                         labels,
@@ -219,9 +228,59 @@ def run_configured_experiment(config: ExperimentConfig) -> list[Path]:
                         validation_folds=config.split.validation_folds,
                         seed=seed,
                         label_rows=benchmark.label_rows,
-                    ).values()
+                    )
+                outputs.extend(detector_outputs.values())
+                prediction_path = next(iter(detector_outputs.values())) / "preds.csv"
+                with prediction_path.open(newline="", encoding="utf-8") as handle:
+                    rows = list(csv.DictReader(handle))
+                for row in rows:
+                    row.update(
+                        label=int(row["label"]),
+                        pred=int(row["pred"]),
+                        score=float(row["score"]),
+                    )
+                grouped = {
+                    "operator": grouped_recall(rows, group_field="operator_id",
+                        groups=[f"P{i}" for i in range(1, 4)] + [f"A{i}" for i in range(1, 4)],
+                        bootstrap_replicates=config.bootstrap_replicates, seed=seed),
+                    "difficulty": grouped_recall(rows, group_field="difficulty",
+                        groups=["easy", "medium", "hard"],
+                        bootstrap_replicates=config.bootstrap_replicates, seed=seed),
+                }
+                (output_root / "grouped_recall.json").write_text(
+                    json.dumps(grouped, indent=2, sort_keys=True) + "\n", encoding="utf-8"
                 )
+    _write_cross_seed_summary(config, outputs)
     return outputs
+
+
+def _write_cross_seed_summary(config: ExperimentConfig, outputs: list[Path]) -> None:
+    summary_root = config.output_root / config.exp_id
+    if (summary_root / "summary.json").exists() or (summary_root / "summary.csv").exists():
+        raise FileExistsError(f"refusing to overwrite experiment summary: {summary_root}")
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for output in outputs:
+        metrics_path = output / "metrics.json"
+        if metrics_path.is_file():
+            with metrics_path.open(encoding="utf-8") as handle:
+                grouped.setdefault("/".join(output.parts[-3:-1]), []).append(json.load(handle))
+    summaries = {
+        key: aggregate_seed_metrics(rows, config.metrics)
+        for key, rows in sorted(grouped.items())
+    }
+    summary_root.mkdir(parents=True, exist_ok=True)
+    (summary_root / "summary.json").write_text(
+        json.dumps(summaries, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    with (summary_root / "summary.csv").open("w", newline="", encoding="utf-8") as handle:
+        fields = ["method", "seed_count", *config.metrics, "tp", "fp", "fn", "tn"]
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        for key, summary in summaries.items():
+            row = {"method": key, "seed_count": summary["seed_count"]}
+            row.update({metric: summary.get(metric) for metric in config.metrics})
+            row.update(summary["confusion"])
+            writer.writerow(row)
 
 
 def run_baselines_for_org(
@@ -258,15 +317,23 @@ def run_contamination_for_org(
     """Run EXP-04 with a deterministic fixed-test/contamination partition."""
     policy_ids = [policy["policy_id"] for policy in benchmark.policies]
     positives = [policy_id for policy_id in policy_ids if benchmark.label_map[policy_id] == 1]
-    fixed_test = tuple(positives[: max(1, int(len(positives) * 0.8))])
-    pool = tuple(positives[len(fixed_test) :])
+    pool = tuple(positives[: max(1, len(positives) // 2)])
+    evaluation_ids = [policy_id for policy_id in policy_ids if policy_id not in pool]
+    split = make_evaluation_split(
+        evaluation_ids, {policy_id: benchmark.label_map[policy_id] for policy_id in evaluation_ids},
+        test_fraction=config.split.test_fraction,
+        validation_folds=config.split.validation_folds, seed=seed,
+    )
+    fixed_test = split.test_ids
+    counts = tuple(max(1, len(pool) * 10 // 100) if level == "percent" else int(level)
+                   for level in config.contamination_levels)
     results = run_contamination_evaluation(
         policy_ids,
         embeddings,
         benchmark.label_map,
         fixed_test_ids=fixed_test,
         contamination_pool=pool,
-        contamination_counts=(0, 1, 5, 10),
+        contamination_counts=counts,
         detector_name=config.detector,
         detector_params=config.detector_params,
         validation_folds=config.split.validation_folds,

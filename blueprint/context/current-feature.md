@@ -154,6 +154,11 @@ aggregate summaries for the same inputs and Git revision.
   **Done when:** EXP-01 consumes configured candidates without using locked
   test rows and the focused protocol tests pass.
 
+- [x] **Repair review findings F-03 through F-06.** Complete EXP-04 fixed
+  contamination splits, EXP-13 grouped recall, EXP-02 Node2Vec comparison,
+  and deterministic cross-seed summaries. **Done when:** full test and lint
+  gates pass and each configured dispatch emits its required output.
+
 ## Files / areas
 
 - `configs/experiments/exp01.yaml`, `exp02.yaml`, `exp03.yaml`, `exp04.yaml`,

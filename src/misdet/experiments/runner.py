@@ -168,6 +168,7 @@ def run_configured_experiment(config: ExperimentConfig) -> list[Path]:
                         labels,
                         output_root,
                         detector_params=config.detector_params,
+                        detector_grid=config.detector_grid,
                         validation_folds=config.split.validation_folds,
                         seed=seed,
                     ).values()

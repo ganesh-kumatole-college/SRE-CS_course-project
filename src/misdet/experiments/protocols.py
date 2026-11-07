@@ -36,6 +36,7 @@ def run_detector_comparison(
     output_root: str | Path,
     *,
     detector_params: Mapping[str, Mapping[str, Any]] | None = None,
+    detector_grid: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
     detectors: Sequence[str] = DETECTOR_NAMES,
     scale: bool = True,
     threshold_percentile: float = 95.0,
@@ -63,9 +64,40 @@ def run_detector_comparison(
     train_indices, test_indices = _split_indices(ids, split)
     test_labels = np.asarray([labels[policy_id] for policy_id in split.test_ids], dtype=int)
     params_by_detector = detector_params or {}
+    grid_by_detector = detector_grid or {}
     outputs: dict[str, Path] = {}
     for name in names:
         params = dict(params_by_detector.get(name, {}))
+        candidates = tuple(grid_by_detector.get(name, ()))
+        tuning: dict[str, Any] = {"mode": "none"}
+        if candidates:
+            validation_ids = split.validation_folds[0]
+            validation_set = set(validation_ids)
+            fit_ids = tuple(
+                policy_id for policy_id in split.train_normal_ids if policy_id not in validation_set
+            )
+            fit_indices, validation_indices = _split_indices(
+                ids,
+                EvaluationSplit(
+                    train_normal_ids=fit_ids,
+                    validation_folds=(),
+                    test_ids=validation_ids,
+                ),
+            )
+            params = select_detector_params(
+                name,
+                values[fit_indices],
+                values[validation_indices],
+                [0] * len(validation_indices),
+                candidates,
+                scale=scale,
+                seed=seed,
+            )
+            tuning = {
+                "mode": "validation_normal_fold",
+                "candidate_count": len(candidates),
+                "validation_ids": list(validation_ids),
+            }
         model = fit_detector(name, values[train_indices], params=params, scale=scale, seed=seed)
         validation_scores = cross_validated_normal_scores(
             split.train_normal_ids,
@@ -112,6 +144,7 @@ def run_detector_comparison(
             config={
                 "seed": seed,
                 "detector": {"name": name, "params": params, "scale": scale},
+                "tuning": tuning,
                 "split": {
                     "protocol": "paper_90_10",
                     "validation_folds": validation_folds,
@@ -150,7 +183,12 @@ def select_detector_params(
         model = fit_detector(detector_name, train_features, params=params, scale=scale, seed=seed)
         scores = model.score(values)
         predictions = model.predict_default(values)
-        score = evaluate_predictions(labels, scores, predictions)["f1"]
+        if np.any(labels == 1):
+            score = evaluate_predictions(labels, scores, predictions)["f1"]
+        else:
+            # Paper-style validation contains normals only; select the
+            # candidate with the fewest validation false positives.
+            score = -float(np.mean(predictions))
         if score > best_score:
             best_score = score
             best_params = params

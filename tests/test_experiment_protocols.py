@@ -1,4 +1,5 @@
 import numpy as np
+import yaml
 
 from misdet.experiments.protocols import (
     contaminated_training_ids,
@@ -22,14 +23,22 @@ def test_detector_comparison_reuses_one_locked_test_set(tmp_path):
         tmp_path / "runs",
         detectors=("lof", "one_class_svm"),
         detector_params={"lof": {"n_neighbors": 5}, "one_class_svm": {"nu": 0.2}},
+        detector_grid={
+            "lof": (
+                {"n_neighbors": 3, "novelty": True},
+                {"n_neighbors": 5, "novelty": True},
+            )
+        },
         validation_folds=4,
         seed=3,
     )
 
-    first_config = (outputs["lof"] / "config.yaml").read_text()
-    second_config = (outputs["one_class_svm"] / "config.yaml").read_text()
-    assert '"policy-16"' in first_config or "policy-16" in first_config
-    assert first_config.split("test_ids:")[1] == second_config.split("test_ids:")[1]
+    first_config = yaml.safe_load((outputs["lof"] / "config.yaml").read_text())
+    second_config = yaml.safe_load((outputs["one_class_svm"] / "config.yaml").read_text())
+    assert "policy-16" in first_config["split"]["test_ids"]
+    assert first_config["split"]["test_ids"] == second_config["split"]["test_ids"]
+    assert first_config["tuning"]["mode"] == "validation_normal_fold"
+    assert first_config["tuning"]["candidate_count"] == 2
 
 
 def test_contamination_selection_is_seeded_and_does_not_change_locked_test_ids():

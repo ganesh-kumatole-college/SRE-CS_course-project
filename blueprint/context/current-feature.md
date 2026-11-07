@@ -148,6 +148,12 @@ aggregate summaries for the same inputs and Git revision.
   **Done when:** the command dispatches each selected experiment, rejects
   unknown IDs, and `make test` plus `make lint` pass.
 
+- [x] **Repair review finding F-02.** Wire the EXP-01 detector grid into
+  validation-only selection on training-normal folds, persist the selected
+  parameters and tuning metadata, and add regression coverage for the path.
+  **Done when:** EXP-01 consumes configured candidates without using locked
+  test rows and the focused protocol tests pass.
+
 ## Files / areas
 
 - `configs/experiments/exp01.yaml`, `exp02.yaml`, `exp03.yaml`, `exp04.yaml`,

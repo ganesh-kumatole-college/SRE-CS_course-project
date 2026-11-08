@@ -35,9 +35,13 @@ data/interim/*
 !data/interim/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
+data/benchmark/*
+!data/benchmark/.gitkeep
 neo4j_data/
 results/runs/*
 !results/runs/.gitkeep
+results/smoke/
+configs/experiments/smoke/
 
 # Editors and operating systems
 .DS_Store

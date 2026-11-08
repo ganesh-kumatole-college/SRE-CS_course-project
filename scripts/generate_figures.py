@@ -7,10 +7,11 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 import shutil
 import sys
+from typing import Any
 import warnings
-from pathlib import Path
 from typing import Any
 
 import matplotlib

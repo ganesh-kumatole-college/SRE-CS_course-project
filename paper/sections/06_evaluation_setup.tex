@@ -1,0 +1,32 @@
+\section{Evaluation Setup}
+\label{sec:eval_setup}
+
+Our empirical evaluation is structured around four primary research questions:
+\begin{itemize}
+    \item \textbf{RQ1 (Reproduction)}: Does graph-embedding anomaly detection with Node2Vec and LOF reliably detect IAM misconfigurations across enterprise profiles, matching trends reported in prior academic literature?
+    \item \textbf{RQ2 (Detector Comparison)}: How do alternative unsupervised anomaly detection algorithms (LOF, One-Class SVM, Isolation Forest, Robust Covariance) compare in minority-class precision and recall under identical feature representations?
+    \item \textbf{RQ3 (Representation Ablation)}: Does structural graph embedding with Node2Vec deliver measurable performance advantages over simpler, non-graph baselines (hand-crafted features and bag-of-actions)?
+    \item \textbf{RQ4 (Contamination Robustness)}: How gracefully does detection recall degrade when training data contains unlabeled, pre-existing policy misconfigurations?
+\end{itemize}
+
+\subsection{Baseline Methods}
+We evaluate Node2Vec+LOF against five representative baselines:
+\begin{enumerate}
+    \item \textbf{Random Prevalence Baseline}: Assigns positive predictions uniformly at random matching the empirical training class prevalence.
+    \item \textbf{Wildcard Heuristic}: A deterministic rule flagging any policy that contains an asterisk wildcard (\texttt{"*"}) in either the \texttt{"Action"} or \texttt{"Resource"} fields.
+    \item \textbf{Permissiveness Score}: A heuristic scoring policies based on raw action volume and weighted occurrence of known sensitive administrative prefixes (e.g., \texttt{"iam:*"}, \texttt{"kms:*"}).
+    \item \textbf{Hand-Crafted Features + LOF}: Represents each policy as a 12-dimensional vector of expert-engineered attributes (action count, distinct services count, wildcard fraction, resource count, statement count, condition block count, and sensitive action indicator flags), scored with LOF.
+    \item \textbf{Bag-of-Actions (BoA) + LOF}: Represents each policy as a high-dimensional binary occurrence vector over the global vocabulary of observed AWS API actions, scored with LOF.
+\end{enumerate}
+
+\subsection{Evaluation Metrics and Split Protocol}
+In enterprise security triage, the vast majority of policies are benign; misconfigurations represent a sparse minority class. In accordance with rigorous evaluation standards for imbalanced data, we treat \textbf{Misconfiguration as the Positive Class} ($y=1$). We report:
+\begin{itemize}
+    \item \textbf{Minority-Class Precision ($P$)}, \textbf{Recall ($R$)}, and \textbf{F1 Score ($F_1$)} evaluated at the calibrated decision threshold $\tau$.
+    \item \textbf{Precision-Recall Area Under Curve (PR-AUC)}~\cite{davis2006relationship}: The definitive metric for imbalanced anomaly detection, insensitive to true negative inflation.
+    \item \textbf{ROC-AUC}: Receiver Operating Characteristic area under curve.
+\end{itemize}
+
+\subsection{Statistical Rigor and Leakage Prevention}
+All experiments employ stratified 70/15/15 train/validation/test splits. Training and validation sets contain exclusively benign policies (or controlled contamination mixtures in RQ4). The test set remains strictly locked until final evaluation; no embeddings are fitted, scaled, or thresholded using test instances. To ensure statistical reliability, all stochastic processes are executed across 30 seeded repetitions (seeds 0--29), and we compute 95\% non-parametric bootstrap confidence intervals ($B=1{,}000$)~\cite{efron1979bootstrap} for all reported aggregate metrics.
+

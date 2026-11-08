@@ -1,0 +1,59 @@
+\section{Approach and Implementation}
+\label{sec:approach}
+
+\begin{figure*}[t]
+\centering
+\fbox{\parbox{0.95\textwidth}{\centering
+\textbf{[Pipeline Architecture Overview]}\\[0.5em]
+\texttt{IAM JSON Policies} $\longrightarrow$ \texttt{Normalization \& AST Extraction} $\longrightarrow$ \texttt{Heterogeneous Graph Construction} \\
+$\longrightarrow$ \texttt{Leak-Free Train/Val Split} $\longrightarrow$ \texttt{Node2Vec Embeddings} $\longrightarrow$ \texttt{Anomaly Scoring (LOF)} $\longrightarrow$ \texttt{Validation Calibration} $\longrightarrow$ \texttt{Locked Test Evaluation}
+}}
+\caption{End-to-end architecture of the graph-embedding anomaly detection pipeline.}
+\label{fig:pipeline}
+\end{figure*}
+
+Our architecture translates declarative IAM access policies into low-dimensional structural vectors to detect privilege anomalies without expert-crafted rules. Figure~\ref{fig:pipeline} illustrates the end-to-end pipeline.
+
+\subsection{Heterogeneous IAM Graph Construction}
+We formalize cloud IAM authorization topology as a directed heterogeneous graph $G = (V, E)$, consisting of four node types and three directed relation types:
+\begin{itemize}
+    \item \textbf{Entity Nodes ($V_E$)}: Represent identities, partitioned into Users ($u$), Groups ($g$), and Roles ($r$).
+    \item \textbf{Policy Nodes ($V_P$)}: Represent individual IAM managed or inline policies ($p$).
+    \item \textbf{Action Nodes ($V_A$)}: Represent standardized, lowercased AWS API actions (e.g., \texttt{"s3:getobject"}, \texttt{"ec2:describesecuritygroups"}). Glob patterns are expanded where finite or retained as explicit wildcard action nodes.
+    \item \textbf{Resource Nodes ($V_R$)}: Represent resource patterns, parameterized to normalize organization-specific account IDs and region prefixes.
+\end{itemize}
+
+Edges represent authorization dependencies:
+\begin{itemize}
+    \item $(e, \text{ATTACHED\_TO}, p)$ connects an Entity $e \in V_E$ to an attached Policy $p \in V_P$.
+    \item $(p, \text{PERMITS}, a)$ connects Policy $p \in V_P$ to an allowed Action $a \in V_A$.
+    \item $(p, \text{TARGETS}, r)$ connects Policy $p \in V_P$ to a target Resource $r \in V_R$.
+\end{itemize}
+The graph is loaded into Neo4j via Cypher transactions with a fallback to NetworkX for standalone reproduction.
+
+\subsection{Leakage-Safe Node2Vec Embedding Projection}
+A major methodological hazard in evaluating graph-embedding anomaly detection is transductive data leakage: if test policies (including injected misconfigurations) are present in the graph when random walks are generated, the resulting embeddings encode relational artifacts of the test distribution. 
+
+To ensure complete leakage safety:
+\begin{enumerate}
+    \item The graph $G_{\text{train}}$ is constructed exclusively from normal policies in the training split.
+    \item Node2Vec biased random walks ($p=1.0, q=1.0$, walk length 80, 10 walks per node, vector dimension $d=128$) are generated strictly over $G_{\text{train}}$, training a Skip-gram model with negative sampling.
+    \item Test policies are projected into the learned vector space without retraining. A test policy node $p_{\text{test}}$ inherits its vector by aggregating the embeddings of its incident actions, resources, and entity contexts learned during training, preventing any test-time structural contamination.
+\end{enumerate}
+
+\subsection{Anomaly Detection and Calibrated Decision Thresholding}
+Once policy embeddings $\mathbf{z}_p \in \mathbb{R}^{128}$ are produced, an unsupervised anomaly detector computes an anomaly score $s(p) \in \mathbb{R}^+$. While our primary detector is Local Outlier Factor ($k=20$), our pipeline supports interchangeable estimators:
+\begin{itemize}
+    \item \textbf{LOF}: Density-based scoring comparing local reachability against $k$-nearest training neighbors.
+    \item \textbf{One-Class SVM}: Non-linear boundary estimation with an RBF kernel ($\gamma = \text{"scale"}$).
+    \item \textbf{Isolation Forest}: Ensemble of 100 random partition trees scoring isolation depth.
+    \item \textbf{Robust Covariance}: Minimum Covariance Determinant (MCD) estimating Mahalanobis distances from the training centroid.
+\end{itemize}
+
+To map continuous anomaly scores $s(p)$ to binary classification decisions ($\hat{y} \in \{0, 1\}$) without leaking test labels:
+\begin{enumerate}
+    \item Detectors are fitted exclusively on normal training embeddings.
+    \item The decision threshold $\tau$ is calibrated using an internal validation split $\mathcal{D}_{\text{val}}$. We select $\tau$ at the $(1 - \alpha)$-th percentile of normal validation scores (e.g., $\alpha = 0.05$ or tuned on a held-out validation tuning grid).
+    \item Policies in the locked test set $\mathcal{D}_{\text{test}}$ are predicted as anomalous if $s(p) \ge \tau$.
+\end{enumerate}
+

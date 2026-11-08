@@ -1,0 +1,26 @@
+\section{Discussion and Threats to Validity}
+\label{sec:discussion}
+
+\subsection{Root Causes of Detection Failures}
+Our empirical failure analysis reveals fundamental limitations inherent to structural graph random walks:
+
+\begin{enumerate}
+    \item \textbf{Condition Block Blindness}: AWS IAM policies frequently achieve least-privilege security not by restricting actions, but by enforcing fine-grained \texttt{Condition} blocks (e.g., \texttt{"aws:PrincipalOrgID"}, \texttt{"aws:MultiFactorAuthPresent"}). Because our graph model projects entities, actions, and resources as discrete topological nodes, policy condition semantics are collapsed or omitted. Consequently, subtle lateral movement operators (A2) that omit condition keys are structurally identical to valid role definitions in graph space.
+    \item \textbf{Graph Sparsity in Small Workloads}: In small or heterogeneous cloud deployments, legitimate roles may be unique (e.g., a single billing auditor role). Density-based estimators like LOF risk flagging legitimate unique roles as outliers simply due to low local neighborhood density.
+    \item \textbf{Resource Parameterization}: Abstracting specific ARNs into generic resource nodes is necessary to prevent severe graph bloat, but discards data-tier sensitivity distinctions (e.g., distinguishing public staging buckets from restricted customer databases).
+\end{enumerate}
+
+\subsection{Operational SRE and Deployment Realities}
+From a DevSecOps and Site Reliability Engineering (SRE) perspective, graph-embedding anomaly detection provides distinct operational trade-offs compared to static linters:
+\begin{itemize}
+    \item \textbf{Alert Fatigue Mitigation}: Security Operations Center (SOC) analysts face overwhelming alert volume from naive static linters. With a precision of $0.938$, Node2Vec+LOF serves as an exceptional secondary triaging filter, prioritizing alerts with high structural anomaly likelihood over raw wildcard counts.
+    \item \textbf{CI/CD Pipeline Integration}: While generating global Node2Vec walks over millions of nodes is computationally intensive for real-time pull request checks, our out-of-sample projection enables sub-second policy scoring once the baseline graph embedding space is initialized.
+\end{itemize}
+
+\subsection{Threats to Validity}
+\begin{itemize}
+    \item \textbf{Internal Validity}: The synthetic benchmark, while designed with realistic enterprise archetypes and hard negatives, may not capture all nuanced idiosyncrasies of organically evolved corporate IAM sprawl. We mitigated this by validating template structures against sanitized public AWS-managed policies.
+    \item \textbf{Construct Validity}: Anomaly detection assumes misconfigurations are rare and topologically distinctive. If an enterprise possesses pervasive, widespread misconfigurations across its baseline, unsupervised detectors risk learning the misconfigurations as normative patterns.
+    \item \textbf{External Validity}: Our implementation focuses on AWS IAM JSON semantics. While the core Entity--Policy--Action--Resource formulation generalizes to Google Cloud Platform (GCP) IAM and Microsoft Azure RBAC, differences in role inheritance and resource hierarchies may influence embedding stability.
+\end{itemize}
+

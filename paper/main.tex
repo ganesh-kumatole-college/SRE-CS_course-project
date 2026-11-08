@@ -1,0 +1,51 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{url}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{Re-evaluating Graph-Embedding Anomaly Detection for AWS IAM Policy Misconfigurations on an Open Benchmark}
+
+\author{\IEEEauthorblockN{Course Project Implementation}
+\IEEEauthorblockA{\textit{Cloud and Site Reliability Engineering} \\
+\textit{Academic Course Project Reproducibility Report}}
+}
+
+\maketitle
+
+\begin{abstract}
+Cloud Identity and Access Management (IAM) configurations in modern cloud infrastructure are notoriously complex, dynamic, and error-prone. While static rule-based policy linters detect obvious administrative wildcards, they suffer from high false-positive rates and fail to capture contextual, peer-dependent privilege drift. Recent academic proposals suggested leveraging unsupervised graph representation learning (Node2Vec) and density-based anomaly detection (Local Outlier Factor) to identify misconfigured policies without manual rule curation. However, prior evaluations relied entirely on closed corporate datasets, leaving reproduction, baseline comparison, hyperparameter stability, and failure modes unexamined. In this paper, we conduct an independent re-implementation and empirical evaluation of graph-embedding anomaly detection on a newly constructed, open synthetic IAM benchmark. Our benchmark models three distinct enterprise profiles (\texttt{alpha}, \texttt{beta}, \texttt{gamma}) with six realistic privilege escalation and excessive action mutation operators alongside hard negatives. Our empirical results demonstrate that Node2Vec+LOF achieves an impressive minority-class precision of 0.938 (compared to 0.462 for heuristic baselines) with an F1 score of 0.652, PR-AUC of 0.896, and ROC-AUC of 0.890. However, granular per-operator failure analysis reveals that while graph random walks excel at capturing structural anomalies and blatant escalations (easy recall 0.50), they achieve zero recall on hard, condition-dependent lateral movement mutations that lack topological distinction. We conclude with practical recommendations for hybrid security postures in cloud DevSecOps.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Cloud Security, AWS IAM, Access Control, Anomaly Detection, Graph Embeddings, Node2Vec, Local Outlier Factor, DevSecOps.
+\end{IEEEkeywords}
+
+\input{sections/01_introduction.tex}
+\input{sections/02_background.tex}
+\input{sections/03_related_work.tex}
+\input{sections/04_approach.tex}
+\input{sections/05_benchmark.tex}
+\input{sections/06_evaluation_setup.tex}
+\input{sections/07_results.tex}
+\input{sections/08_discussion.tex}
+\input{sections/09_conclusion.tex}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
+

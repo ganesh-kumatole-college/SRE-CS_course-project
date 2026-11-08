@@ -1,0 +1,9 @@
+\section{Conclusion and Future Work}
+\label{sec:conclusion}
+
+In this work, we conducted an independent reproduction and rigorous empirical evaluation of graph-embedding anomaly detection for AWS IAM policy misconfigurations on an open, reproducible benchmark. 
+
+Our findings demonstrate that Node2Vec coupled with Local Outlier Factor delivers high-precision anomaly scoring (precision $0.938$, F1 $0.652$, PR-AUC $0.896$), effectively mitigating the rampant false-positive alarms produced by static linters and heuristic baselines. However, our granular failure analysis exposes that graph random walks struggle with subtle, condition-dependent mutations, yielding zero recall on hard lateral movement operators. 
+
+We recommend a hybrid cloud security posture: deterministic static linters should remain the first line of defense for syntactic hygiene, while graph-embedding anomaly detection should be deployed as a high-precision peer-triage engine to detect structural policy drift. Future research should explore relational Graph Neural Networks (e.g., RGCNs) that natively integrate text embeddings of JSON condition expressions with topological access graph structures.
+

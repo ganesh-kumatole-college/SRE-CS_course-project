@@ -1,0 +1,19 @@
+\section{Related Work}
+\label{sec:related}
+
+Research on cloud access control security broadly divides into static rule-based auditing, formal verification, runtime access analysis, and machine learning for role mining.
+
+\subsection{Static Policy Linters and Governance Engines}
+Static analysis tools parse declarative infrastructure and cloud configurations against predefined catalogs of insecure patterns. Tools such as Cloud Custodian~\cite{cloudcustodian2023}, Checkov, and Prowler evaluate JSON policies using boolean conditions (e.g., flagging any policy granting \texttt{"*"} actions on resource \texttt{"*"}). While essential for baseline hygiene, rule-based linters exhibit high operational maintenance overhead and generate excessive false positives when broad permissions are legitimately required by administrative roles, while failing to detect subtle contextual anomalies.
+
+\subsection{Formal Verification and Automated Reasoning}
+Formal methods apply Satisfiability Modulo Theories (SMT) to verify mathematical properties of access policies. Backes et al.~\cite{backes2018semantic} developed Zelkova, translating IAM policies into first-order logic formulas to prove whether a given policy is strictly more permissive than another or permits public accessibility. While formal provers provide sound guarantees regarding policy equivalence and containment, they require formal specification of invariant properties, do not infer behavioral norms across organizations, and cannot quantify anomaly likelihood.
+
+\subsection{Runtime Log Auditing and Reactive Analysis}
+Reactive analysis inspects historical API invocations recorded in audit trails such as AWS CloudTrail. Prior approaches analyze event streams to identify dormant permissions or detect runtime deviations from established access baselines. Zahoor et al.~\cite{zahoor2022towards} and Macedo et al.~\cite{macedo2020least} studied automated least-privilege policy mining from observed execution traces. However, reactive auditing inherently operates post-hoc: misconfigurations remain exploitable until after malicious API activity occurs. Furthermore, development environments or newly deployed microservices lack sufficient historical logs, necessitating pre-deployment static structural inspection.
+
+\subsection{Graph Representation Learning in Access Control}
+To combine static structural inspection with data-driven anomaly detection, recent works have explored graph representations for Role-Based Access Control (RBAC) and cloud authorization graphs. By framing policy analysis as an outlier detection problem over graph embeddings, graph neural networks and random-walk embeddings (Node2Vec) aim to capture higher-order relationships between identities and permissions without requiring manual rule curation. 
+
+Our work directly investigates this frontier. We evaluate the core premise that unsupervised graph embeddings outperform conventional feature-based methods, providing the first open benchmark and rigorous baseline comparison to substantiate or temper claims of graph-embedding superiority.
+

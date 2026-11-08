@@ -1,0 +1,40 @@
+\section{Benchmark Construction}
+\label{sec:benchmark}
+
+Because real enterprise IAM datasets contain sensitive proprietary topology and cannot be shared publicly, prior studies evaluated their methods on inaccessible closed corporate environments. To enable rigorous reproduction and community benchmarking, we designed a deterministic synthetic IAM benchmark generator producing realistic organization archetypes and calibrated misconfiguration injections.
+
+\subsection{Organization Archetypes}
+The generator produces three distinct enterprise profiles reflecting realistic cloud architectures:
+\begin{itemize}
+    \item \textbf{Organization Alpha (\texttt{alpha})}: A cloud-native technology startup featuring high developer autonomy, microservice architectures, and heavy reliance on Amazon S3, AWS Lambda, and DynamoDB.
+    \item \textbf{Organization Beta (\texttt{beta})}: A regulated enterprise characterized by strict segregation of duties, formal audit roles, and pervasive KMS encryption and VPC boundary constraints.
+    \item \textbf{Organization Gamma (\texttt{gamma})}: A hybrid enterprise environment operating data pipelines, analytics clusters, and mixed batch workloads across heterogeneous services.
+\end{itemize}
+
+Each organization is generated from structured declarative templates specifying entity counts, departmental groups, role hierarchies, and legitimate baseline policies.
+
+\subsection{Traceable Misconfiguration Operators}
+To ground evaluation in real-world security vulnerabilities, we formalized six reproducible mutation operators spanning two primary threat categories: Privilege Escalation (P) and Excessive Actions (A).
+\begin{itemize}
+    \item \textbf{P1 (Direct Privilege Escalation)}: Injects administrative attachment capabilities (e.g., granting \texttt{"iam:AttachUserPolicy"} or \texttt{"iam:PutUserPolicy"} to a non-admin role).
+    \item \textbf{P2 (Administrative Wildcard Injection)}: Broadens action lists with administrative wildcards on core services (e.g., \texttt{"iam:*"}, \texttt{"ec2:*"}).
+    \item \textbf{P3 (Resource Scope Escalation)}: Replaces restricted resource ARNs with unrestricted wildcards (\texttt{"Resource": "*"}), breaking resource boundaries.
+    \item \textbf{A1 (Cross-Service Permissiveness)}: Appends broad auxiliary service actions (e.g., adding CloudTrail or CloudWatch administrative verbs) to a specialized operational role.
+    \item \textbf{A2 (Stealthy Lateral Movement)}: Adds permissive assume-role capabilities (\texttt{"sts:AssumeRole"}) omitting external ID or session tag conditions.
+    \item \textbf{A3 (Data Exfiltration Enablement)}: Combines read permissions with unconstrained replication or export permissions (e.g., \texttt{"s3:PutReplicationConfiguration"}).
+\end{itemize}
+
+Each injected sample is annotated with a difficulty tier: \emph{Easy} (P1--P2, characterized by blatant wildcards or sensitive IAM verbs), \emph{Medium} (P3, A1), and \emph{Hard} (A2--A3, where verbs are syntactically subtle and lack wildcards).
+
+\subsection{Hard Negatives and Dataset Statistics}
+A frequent pitfall in synthetic anomaly detection is generating benign policies that are trivially uniform, allowing detectors to flag any complex policy as anomalous. To prevent this, our generator includes \emph{hard negatives}: complex, multi-statement legitimate policies (e.g., emergency break-glass procedures, cross-region replication scripts, and centralized logging delegates) that exhibit high verb counts and diverse resource patterns while remaining benign.
+
+\begin{table}[t]
+\centering
+\caption{Dataset statistics across organizations in the open benchmark.}
+\label{tab:dataset_stats}
+\input{../../results/smoke/tables/t1_dataset_stats.tex}
+\end{table}
+
+Table~\ref{tab:dataset_stats} summarizes the dataset statistics. Misconfigurations represent a realistic minority class (prevalence between 5\% and 10\%), reflecting actual enterprise security posture where anomalies are sparse outliers amidst standard configurations.
+

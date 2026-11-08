@@ -1,0 +1,41 @@
+\section{Background}
+\label{sec:background}
+
+\subsection{AWS IAM Policy Architecture}
+AWS Identity and Access Management governs authentication and authorization across cloud resources. Permissions are specified in declarative JSON documents composed of statements. Each statement defines:
+\begin{itemize}
+    \item \textbf{Effect}: Either \texttt{Allow} or \texttt{Deny}. By default, all requests are implicitly denied unless explicitly allowed, and explicit denies override any allows.
+    \item \textbf{Action}: A list of service API verbs (e.g., \texttt{"s3:GetObject"}, \texttt{"iam:CreateUser"}, or glob patterns such as \texttt{"s3:*"}).
+    \item \textbf{Resource}: The Amazon Resource Name (ARN) specifying the target assets to which the statement applies (e.g., \texttt{"arn:aws:s3:::production-data/*"} or \texttt{"*"}).
+    \item \textbf{Condition}: Optional key-value constraints evaluated at runtime (e.g., IP range, MFA enforcement, or source VPC).
+\end{itemize}
+
+Policies are attached to IAM identities: \emph{Users} (long-term individual credentials), \emph{Groups} (collections of users), and \emph{Roles} (assumable identities for automated workloads and temporary federated access). A policy misconfiguration arises when permissions exceed the least-privilege boundary required by the entity's functional mandate, creating paths for privilege escalation or unauthorized data exfiltration.
+
+\subsection{Node2Vec Graph Representation Learning}
+Node2Vec~\cite{grover2016node2vec} is an unsupervised framework for learning continuous, low-dimensional feature representations for nodes in arbitrary networks. Given an undirected graph $G = (V, E)$, Node2Vec optimizes a neighborhood-preserving objective by extending the Skip-gram architecture to graphs. 
+
+To sample neighborhoods, Node2Vec employs flexible, second-order random walks parameterized by two search parameters:
+\begin{itemize}
+    \item \textbf{Return parameter $p$}: Controls the likelihood of immediately revisiting the node just traversed in the walk. High $p$ encourages exploration of local structure.
+    \item \textbf{In-out parameter $q$}: Steers the walk toward outward, distant nodes versus localized exploration. Setting $q < 1$ guides the walk toward global, structural roles, whereas $q > 1$ promotes local homophilic clustering.
+\end{itemize}
+The generated random walk sequences are fed into a Skip-gram model trained using negative sampling to produce a mapping $f: V \to \mathbb{R}^d$, where $d \ll |V|$ (typically $d = 128$). In access control graphs, structural equivalence implies that policies fulfilling similar organizational roles occupy adjacent regions in vector space.
+
+\subsection{Local Outlier Factor (LOF) and Anomaly Detectors}
+Local Outlier Factor (LOF)~\cite{breunig2000lof} is a density-based unsupervised anomaly detection algorithm. Unlike global outlier detection methods that assume Gaussian or spherical data distributions, LOF compares the local density of an object to the local densities of its $k$-nearest neighbors.
+
+Let $N_k(p)$ denote the $k$-distance neighborhood of point $p$, and let $d(p, o)$ denote the Euclidean distance between $p$ and $o$. The reachability distance of $p$ with respect to $o$ is defined as:
+\begin{equation}
+\text{reach-dist}_k(p, o) = \max\{k\text{-distance}(o), d(p, o)\}
+\end{equation}
+The local reachability density (lrd) of $p$ is the inverse of the average reachability distance from its $k$-nearest neighbors:
+\begin{equation}
+\text{lrd}_k(p) = \left[ \frac{\sum_{o \in N_k(p)} \text{reach-dist}_k(p, o)}{|N_k(p)|} \right]^{-1}
+\end{equation}
+The LOF score of $p$ is the average ratio of the lrd of its neighbors to that of $p$:
+\begin{equation}
+\text{LOF}_k(p) = \frac{\sum_{o \in N_k(p)} \frac{\text{lrd}_k(o)}{\text{lrd}_k(p)}}{|N_k(p)|}
+\end{equation}
+Points located inside dense clusters have an LOF score approximately equal to $1.0$, whereas points isolated from dense regions yield an $\text{LOF} \gg 1.0$, indicating anomalous privilege configurations. In addition to LOF, we evaluate One-Class Support Vector Machines (OC-SVM)~\cite{scholkopf2001estimating}, Isolation Forest (IF)~\cite{liu2008isolation}, and Robust Covariance (Elliptic Envelope via Minimum Covariance Determinant)~\cite{rousseeuw1999fast}.
+

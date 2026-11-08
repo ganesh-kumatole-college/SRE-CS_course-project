@@ -255,19 +255,61 @@ def run_configured_experiment(config: ExperimentConfig) -> list[Path]:
 
 
 def _write_cross_seed_summary(config: ExperimentConfig, outputs: list[Path]) -> None:
+    from misdet.eval.bootstrap import bootstrap_confidence_interval
+
     summary_root = config.output_root / config.exp_id
     if (summary_root / "summary.json").exists() or (summary_root / "summary.csv").exists():
         raise FileExistsError(f"refusing to overwrite experiment summary: {summary_root}")
-    grouped: dict[str, list[dict[str, Any]]] = {}
+
+    # Group by path relative to summary_root with the seed component (index 1) dropped.
+    # e.g. alpha/0/lof -> alpha/lof; alpha/0 -> alpha
+    # (seed is always at relative index 1)
+    grouped_metrics: dict[str, list[dict[str, Any]]] = {}
+    grouped_preds: dict[str, list[dict[str, Any]]] = {}
     for output in outputs:
         metrics_path = output / "metrics.json"
-        if metrics_path.is_file():
-            with metrics_path.open(encoding="utf-8") as handle:
-                grouped.setdefault("/".join(output.parts[-3:-1]), []).append(json.load(handle))
-    summaries = {
-        key: aggregate_seed_metrics(rows, config.metrics)
-        for key, rows in sorted(grouped.items())
-    }
+        if not metrics_path.is_file():
+            continue
+        rel_parts = output.relative_to(summary_root).parts
+        # rel_parts[1] is the seed directory; drop it to get the cross-seed group key.
+        key = "/".join(rel_parts[:1] + rel_parts[2:]) if len(rel_parts) > 1 else rel_parts[0]
+        with metrics_path.open(encoding="utf-8") as handle:
+            grouped_metrics.setdefault(key, []).append(json.load(handle))
+        preds_path = output / "preds.csv"
+        if preds_path.is_file():
+            with preds_path.open(newline="", encoding="utf-8") as handle:
+                for row in csv.DictReader(handle):
+                    grouped_preds.setdefault(key, []).append(
+                        {
+                            "label": int(row["label"]),
+                            "score": float(row["score"]),
+                            "pred": int(row["pred"]),
+                        }
+                    )
+
+    summaries: dict[str, Any] = {}
+    for key in sorted(grouped_metrics):
+        summary = aggregate_seed_metrics(grouped_metrics[key], config.metrics)
+        preds = grouped_preds.get(key, [])
+        if preds:
+            labels_arr = np.asarray([r["label"] for r in preds], dtype=int)
+            scores_arr = np.asarray([r["score"] for r in preds], dtype=float)
+            preds_arr = np.asarray([r["pred"] for r in preds], dtype=int)
+            ci = bootstrap_confidence_interval(
+                labels_arr,
+                scores_arr,
+                preds_arr,
+                lambda y, _s, p: (
+                    float(np.sum((y == 1) & (p == 1)) / np.sum(y == 1))
+                    if np.sum(y == 1) > 0
+                    else None
+                ),
+                replicates=config.bootstrap_replicates,
+                seed=0,
+            )
+            summary["bootstrap_recall_ci"] = list(ci) if ci is not None else None
+        summaries[key] = summary
+
     summary_root.mkdir(parents=True, exist_ok=True)
     (summary_root / "summary.json").write_text(
         json.dumps(summaries, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -316,24 +358,44 @@ def run_contamination_for_org(
 ) -> list[Path]:
     """Run EXP-04 with a deterministic fixed-test/contamination partition."""
     policy_ids = [policy["policy_id"] for policy in benchmark.policies]
-    positives = [policy_id for policy_id in policy_ids if benchmark.label_map[policy_id] == 1]
-    pool = tuple(positives[: max(1, len(positives) // 2)])
-    evaluation_ids = [policy_id for policy_id in policy_ids if policy_id not in pool]
-    split = make_evaluation_split(
-        evaluation_ids, {policy_id: benchmark.label_map[policy_id] for policy_id in evaluation_ids},
-        test_fraction=config.split.test_fraction,
-        validation_folds=config.split.validation_folds, seed=seed,
+    positives = sorted(
+        policy_id for policy_id in policy_ids if benchmark.label_map[policy_id] == 1
     )
-    fixed_test = split.test_ids
-    counts = tuple(max(1, len(pool) * 10 // 100) if level == "percent" else int(level)
-                   for level in config.contamination_levels)
+    if len(positives) < 2:
+        raise ValueError(
+            "EXP-04: at least 2 positive policies are required to split into pool and test"
+        )
+    # Reserve the first half of positives as the contamination pool (deterministic).
+    pool_size = max(1, len(positives) // 2)
+    pool = tuple(positives[:pool_size])
+    # Derive the locked test set from the remaining policies (normals + remaining positives).
+    evaluation_ids = [pid for pid in policy_ids if pid not in set(pool)]
+    split = make_evaluation_split(
+        evaluation_ids,
+        {pid: benchmark.label_map[pid] for pid in evaluation_ids},
+        test_fraction=config.split.test_fraction,
+        validation_folds=config.split.validation_folds,
+        seed=seed,
+    )
+    # Resolve contamination levels against the actual pool size.
+    counts: list[int] = []
+    for level in config.contamination_levels:
+        if level == "percent":
+            counts.append(max(1, len(pool) * 10 // 100))
+        else:
+            count = int(level)
+            if count > len(pool):
+                raise ValueError(
+                    f"EXP-04: contamination count {count} exceeds pool size {len(pool)}"
+                )
+            counts.append(count)
     results = run_contamination_evaluation(
         policy_ids,
         embeddings,
         benchmark.label_map,
-        fixed_test_ids=fixed_test,
+        fixed_test_ids=split.test_ids,
         contamination_pool=pool,
-        contamination_counts=counts,
+        contamination_counts=tuple(counts),
         detector_name=config.detector,
         detector_params=config.detector_params,
         validation_folds=config.split.validation_folds,

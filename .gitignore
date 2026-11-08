@@ -21,6 +21,9 @@ dist/
 .coverage
 htmlcov/
 
+# Build and deliverable archives
+*.zip
+
 # Local configuration and credentials
 .env
 .env.*

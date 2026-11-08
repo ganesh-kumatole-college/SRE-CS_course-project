@@ -47,15 +47,18 @@ def test_latex_citations_valid() -> None:
 
 def test_referenced_assets_exist() -> None:
     root = _repo_root()
-    sections_dir = root / "paper" / "sections"
+    paper_dir = root / "paper"
+    sections_dir = paper_dir / "sections"
 
-    for tex_file in list(sections_dir.glob("*.tex")) + [root / "paper" / "main.tex"]:
+    for tex_file in list(sections_dir.glob("*.tex")) + [paper_dir / "main.tex"]:
         content = tex_file.read_text(encoding="utf-8")
 
         # Check \input{...} (excluding sections/)
         for match in re.findall(r"\\input\{([^}]+)\}", content):
             if match.startswith("sections/"):
-                target = root / "paper" / match
+                target = paper_dir / match
+            elif (paper_dir / match).exists() or (paper_dir / f"{match}.tex").exists():
+                target = paper_dir / match
             else:
                 target = (tex_file.parent / match).resolve()
             if not target.suffix:
@@ -65,7 +68,10 @@ def test_referenced_assets_exist() -> None:
 
         # Check \includegraphics{...}
         for match in re.findall(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}", content):
-            target = (tex_file.parent / match).resolve()
+            if (paper_dir / match).exists():
+                target = paper_dir / match
+            else:
+                target = (tex_file.parent / match).resolve()
             err_msg = f"{tex_file.name} references non-existent figure: {match} ({target})"
             assert target.exists(), err_msg
 

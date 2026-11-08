@@ -7,9 +7,11 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 import warnings
 from pathlib import Path
+from typing import Any
 
 import matplotlib
 import pandas as pd
@@ -79,6 +81,10 @@ def _save_fig(fig: plt.Figure, path: Path) -> None:
     fig.savefig(path, format="pdf", bbox_inches="tight")
     plt.close(fig)
     print(f"[OK]   {path}")
+    if Path("paper").is_dir():
+        paper_fig = Path("paper/figures") / path.name
+        paper_fig.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, paper_fig)
 
 
 def _save_table(df: pd.DataFrame, stem: Path) -> None:
@@ -89,6 +95,18 @@ def _save_table(df: pd.DataFrame, stem: Path) -> None:
     tex_path = stem.with_suffix(".tex")
     _write_latex(df, tex_path)
     print(f"[OK]   {tex_path}")
+    if Path("paper").is_dir():
+        paper_tex = Path("paper/tables") / tex_path.name
+        paper_tex.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(tex_path, paper_tex)
+
+
+def _latex_escape(val: Any) -> str:
+    if val is None:
+        return ""
+    if isinstance(val, float):
+        return f"{val:.4f}"
+    return str(val).replace("_", "\\_").replace("%", "\\%")
 
 
 def _write_latex(df: pd.DataFrame, path: Path) -> None:
@@ -98,11 +116,11 @@ def _write_latex(df: pd.DataFrame, path: Path) -> None:
     lines = [
         "\\begin{tabular}{" + col_spec + "}",
         "\\hline",
-        " & ".join(str(c) for c in cols) + " \\\\",
+        " & ".join(_latex_escape(c) for c in cols) + " \\\\",
         "\\hline",
     ]
     for _, row in df.iterrows():
-        lines.append(" & ".join(str(v) if v is not None else "" for v in row) + " \\\\")
+        lines.append(" & ".join(_latex_escape(v) for v in row) + " \\\\")
     lines += ["\\hline", "\\end{tabular}", ""]
     path.write_text("\n".join(lines), encoding="utf-8")
 

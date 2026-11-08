@@ -10,12 +10,12 @@ Table~\ref{tab:main_comparison} reports minority-class precision, recall, F1, PR
 \centering
 \caption{Main comparison: minority-class evaluation of Node2Vec+LOF against baseline methods.}
 \label{tab:main_comparison}
-\input{../../results/smoke/tables/t2_main_comparison.tex}
+\input{tables/t2_main_comparison.tex}
 \end{table*}
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{../../results/smoke/figures/fig5_pr_curves.pdf}
+\includegraphics[width=\columnwidth]{figures/fig5_pr_curves.pdf}
 \caption{Precision-Recall curves comparing Node2Vec+LOF against heuristic and feature baselines.}
 \label{fig:pr_curves}
 \end{figure}
@@ -33,7 +33,7 @@ Table~\ref{tab:detector_comparison} evaluates four unsupervised outlier detectio
 \centering
 \caption{Comparison of anomaly detection algorithms on Node2Vec embeddings.}
 \label{tab:detector_comparison}
-\input{../../results/smoke/tables/t3_detector_comparison.tex}
+\input{tables/t3_detector_comparison.tex}
 \end{table}
 
 \begin{itemize}
@@ -50,12 +50,12 @@ Table~\ref{tab:ablation} and Figure~\ref{fig:ablation} evaluate the representati
 \centering
 \caption{Representation ablation: Node2Vec vs. non-graph feature representations.}
 \label{tab:ablation}
-\input{../../results/smoke/tables/t4_ablation.tex}
+\input{tables/t4_ablation.tex}
 \end{table}
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{../../results/smoke/figures/fig6_ablation_recall.pdf}
+\includegraphics[width=\columnwidth]{figures/fig6_ablation_recall.pdf}
 \caption{Ablation recall bars across representation approaches.}
 \label{fig:ablation}
 \end{figure}
@@ -67,7 +67,7 @@ Figure~\ref{fig:contamination} traces detector recall as the training set is inj
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{../../results/smoke/figures/fig7_contamination_curves.pdf}
+\includegraphics[width=\columnwidth]{figures/fig7_contamination_curves.pdf}
 \caption{Contamination sensitivity: detection recall as unlabeled training misconfigurations increase.}
 \label{fig:contamination}
 \end{figure}
@@ -81,12 +81,12 @@ Table~\ref{tab:operator_recall} and Figure~\ref{fig:operator_recall} detail reca
 \centering
 \caption{Detection recall by injection operator and difficulty tier.}
 \label{tab:operator_recall}
-\input{../../results/smoke/tables/t6_per_operator_recall.tex}
+\input{tables/t6_per_operator_recall.tex}
 \end{table}
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{../../results/smoke/figures/fig4_operator_recall.pdf}
+\includegraphics[width=\columnwidth]{figures/fig4_operator_recall.pdf}
 \caption{Per-operator recall with 95\% bootstrap confidence intervals.}
 \label{fig:operator_recall}
 \end{figure}

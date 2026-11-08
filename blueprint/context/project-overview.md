@@ -1,6 +1,6 @@
 # Detecting Anomalous Misconfigurations in AWS IAM Policies - Project Overview
 
-<!-- blueprint:source-hash 7a94e7879a523bf47efd1427e0111cc347e38de2090926c9ae0544fcd779da59 -->
+<!-- blueprint:source-hash 1fdd4fdadb629eda4e9c82cb760417fb33c52e5675f8618912858c9181637653 -->
 
 > A reproducible research pipeline for detecting anomalous AWS IAM policies with graph embeddings.
 

@@ -1,6 +1,6 @@
 PYTHON ?= python3
 
-.PHONY: setup test lint format neo4j-up neo4j-down smoke-gds run-exp
+.PHONY: setup test lint format neo4j-up neo4j-down smoke-gds run-exp figures tables
 
 setup:
 	$(PYTHON) -m pip install -r requirements.txt -e .
@@ -25,3 +25,6 @@ smoke-gds:
 
 run-exp:
 	$(PYTHON) scripts/run_experiment.py --experiment $(EXP)
+
+figures tables:
+	$(PYTHON) scripts/generate_figures.py
